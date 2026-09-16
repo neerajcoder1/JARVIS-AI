@@ -49,6 +49,12 @@ TOOL_GROUPS = {
         "mouse_click",
         "keyboard_type",
         "keyboard_press"
+    ],
+    "POWER": [
+        "shutdown_computer",
+        "restart_computer",
+        "sleep_computer",
+        "logoff_computer"
     ]
 }
 
@@ -94,6 +100,10 @@ def route_tools(query: str) -> List[str]:
     # INPUT Routing
     if re.search(r'\b(click|type|press|enter|mouse|keyboard|scroll|cursor|dabao|likho)\b', query_lower):
         selected_tools.update(TOOL_GROUPS["INPUT"])
+
+    # POWER Routing
+    if re.search(r'\b(shutdown|restart|sleep|logoff|log off|log out|power off|reboot|band kar|so ja)\b', query_lower):
+        selected_tools.update(TOOL_GROUPS["POWER"])
 
     # If the user says "test.txt", they might just mention a file without action words, but we captured 'file' or action words.
     

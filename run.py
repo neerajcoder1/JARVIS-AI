@@ -37,6 +37,7 @@ def start_voice_loop():
         from app.tools.memory_tools import SaveMemoryTool, RetrieveMemoryTool, DeleteMemoryTool, UpdateMemoryTool
         from app.tools.screen import InspectScreenTool
         from app.tools.input import MouseMoveTool, MouseClickTool, KeyboardTypeTool, KeyboardPressTool
+        from app.tools.power import ShutdownComputerTool, RestartComputerTool, SleepComputerTool, LogoffComputerTool
         
         registry.register(OpenApplicationTool())
         registry.register(CloseApplicationTool())
@@ -75,6 +76,11 @@ def start_voice_loop():
         registry.register(KeyboardTypeTool())
         registry.register(KeyboardPressTool())
         
+        registry.register(ShutdownComputerTool())
+        registry.register(RestartComputerTool())
+        registry.register(SleepComputerTool())
+        registry.register(LogoffComputerTool())
+        
     except Exception as e:
         logger.error(f"Failed to initialize JARVIS components: {e}")
         return
@@ -104,6 +110,13 @@ def start_voice_loop():
     with source:
         asr.recognizer.adjust_for_ambient_noise(source, duration=1)
     
+    try:
+        tts.speak("Welcome Neeraj Sir. I am your JARVIS assistant.")
+        import time
+        time.sleep(2)
+    except Exception as e:
+        logger.error(f"Startup greeting failed: {e}")
+        
     stop_listening = asr.recognizer.listen_in_background(source, asr_callback, phrase_time_limit=15)
     
     try:

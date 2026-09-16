@@ -3,12 +3,13 @@ import queue
 from unittest.mock import patch, MagicMock
 from app.core.exceptions import AudioTimeoutError
 
+@patch("time.sleep")
 @patch("run.SpeechRecognizer")
 @patch("run.AIEngine")
 @patch("run.SpeechSynthesizer")
 @patch("run.sr.Microphone")
 @patch("queue.Queue.get")
-def test_voice_loop_continuous(MockGet, MockMic, MockTTS, MockAI, MockASR):
+def test_voice_loop_continuous(MockGet, MockMic, MockTTS, MockAI, MockASR, MockSleep):
     from run import start_voice_loop
     
     mock_tts = MockTTS.return_value
@@ -21,18 +22,24 @@ def test_voice_loop_continuous(MockGet, MockMic, MockTTS, MockAI, MockASR):
     
     start_voice_loop()
     
+    # Verify Startup Greeting
+    mock_tts.speak.assert_any_call("Welcome Neeraj Sir. I am your JARVIS assistant.")
+    # Verify grace period sleep
+    MockSleep.assert_any_call(2)
+    
     mock_ai.generate_response.assert_called_with("What is Python?")
     # Check that TTS was called with the response and the interrupt event
     args, kwargs = mock_tts.speak.call_args
     assert args[0] == "Python is a language."
     assert "interrupt_event" in kwargs
 
+@patch("time.sleep")
 @patch("run.SpeechRecognizer")
 @patch("run.AIEngine")
 @patch("run.SpeechSynthesizer")
 @patch("run.sr.Microphone")
 @patch("queue.Queue.get")
-def test_voice_loop_timeout_recovers(MockGet, MockMic, MockTTS, MockAI, MockASR):
+def test_voice_loop_timeout_recovers(MockGet, MockMic, MockTTS, MockAI, MockASR, MockSleep):
     from run import start_voice_loop
     
     mock_tts = MockTTS.return_value
