@@ -1,0 +1,8 @@
+.env
+.venv
+__pycache__/
+*.pyc
+.pytest_cache/
+.jarvis/
+test.mp3
+test_out.txt

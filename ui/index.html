@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARVIS 3D Interface</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Courier New', Courier, monospace;
+            color: #ff0000;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 2;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .hud-text {
+            text-shadow: 0 0 5px #ff0000, 0 0 10px #ff0000;
+            font-size: 14px;
+            letter-spacing: 2px;
+            opacity: 0.8;
+            animation: flicker 4s infinite alternate;
+        }
+        .top-left { position: absolute; top: 30px; left: 30px; }
+        .top-right { position: absolute; top: 30px; right: 30px; text-align: right; }
+        .bottom-left { position: absolute; bottom: 30px; left: 30px; }
+        .bottom-right { position: absolute; bottom: 30px; right: 30px; text-align: right; }
+        
+        .reticle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 600px;
+            border: 1px solid rgba(255, 0, 0, 0.1);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        @keyframes flicker {
+            0% { opacity: 0.8; }
+            5% { opacity: 0.5; }
+            10% { opacity: 0.9; }
+            15% { opacity: 1; }
+            100% { opacity: 0.8; }
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff0000;
+            font-size: 24px;
+            letter-spacing: 5px;
+            text-shadow: 0 0 10px #ff0000;
+            z-index: 10;
+        }
+    </style>
+    <!-- Three.js and dependencies -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="loading">INITIALIZING JARVIS...</div>
+    <div id="canvas-container"></div>
+    
+    <div id="ui-overlay">
+        <div class="hud-text top-left">
+            SYS.ONLINE<br>
+            PWR: 100%<br>
+            CORE: STABLE
+        </div>
+        <div class="hud-text top-right">
+            JARVIS MARK II<br>
+            UI PROTOCOL ACTIVATED
+        </div>
+        <div class="hud-text bottom-left" id="coords">
+            X: 0.000<br>
+            Y: 0.000<br>
+            Z: 0.000
+        </div>
+        <div class="hud-text bottom-right">
+            TARGET ACQUIRED<br>
+            READY
+        </div>
+        <div class="reticle"></div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // --- Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x000000, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 15;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        // --- Post Processing (Bloom for Neon Effect) ---
+        const renderScene = new RenderPass(scene, camera);
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0.1;
+        bloomPass.strength = 1.2; // Red glow strength
+        bloomPass.radius = 0.5;
+
+        const composer = new EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        // --- Iron Man Central Image ---
+        const textureLoader = new THREE.TextureLoader();
+        let ironManPlane;
+        
+        textureLoader.load('jarvis.png', (texture) => {
+            document.getElementById('loading').style.display = 'none';
+            
+            // Adjust aspect ratio
+            const aspect = texture.image.width / texture.image.height;
+            const geometry = new THREE.PlaneGeometry(10 * aspect, 10);
+            
+            const material = new THREE.MeshBasicMaterial({ 
+                map: texture, 
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                color: 0xffffff // keep original colors but bloom will pick up reds
+            });
+            
+            ironManPlane = new THREE.Mesh(geometry, material);
+            scene.add(ironManPlane);
+        });
+
+        // --- 3D HUD Elements ---
+        const hudGroup = new THREE.Group();
+        scene.add(hudGroup);
+
+        // Helper to create rotating rings
+        function createRing(radius, tube, color, opacity, segments, yRotation = 0) {
+            const geo = new THREE.TorusGeometry(radius, tube, 16, segments);
+            const mat = new THREE.MeshBasicMaterial({ 
+                color: color, 
+                transparent: true, 
+                opacity: opacity,
+                wireframe: true 
+            });
+            const ring = new THREE.Mesh(geo, mat);
+            ring.rotation.x = Math.PI / 2;
+            ring.rotation.y = yRotation;
+            hudGroup.add(ring);
+            return ring;
+        }
+
+        // Inner Arc Reactor Rings
+        const ring1 = createRing(1.5, 0.02, 0xffffff, 0.8, 64);
+        const ring2 = createRing(2.0, 0.05, 0xff0000, 0.5, 32);
+        const ring3 = createRing(3.5, 0.01, 0xff0000, 0.3, 128);
+        
+        // Outer complex rings
+        const ring4geo = new THREE.TorusGeometry(6, 0.1, 4, 64);
+        const ring4mat = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true, transparent: true, opacity: 0.2 });
+        const ring4 = new THREE.Mesh(ring4geo, ring4mat);
+        hudGroup.add(ring4);
+
+        const ring5geo = new THREE.TorusGeometry(8, 0.05, 3, 100);
+        const ring5mat = new THREE.MeshBasicMaterial({ color: 0xaa0000, wireframe: true, transparent: true, opacity: 0.1 });
+        const ring5 = new THREE.Mesh(ring5geo, ring5mat);
+        ring5.rotation.x = Math.PI/2;
+        hudGroup.add(ring5);
+
+        // --- Data Particles ---
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particlesCount = 1000;
+        const posArray = new Float32Array(particlesCount * 3);
+        
+        for(let i=0; i < particlesCount * 3; i++) {
+            posArray[i] = (Math.random() - 0.5) * 30;
+        }
+        
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const particlesMaterial = new THREE.PointsMaterial({
+            size: 0.05,
+            color: 0xff0000,
+            transparent: true,
+            opacity: 0.6,
+            blending: THREE.AdditiveBlending
+        });
+        
+        const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+        scene.add(particlesMesh);
+
+        // --- Controls & Interaction ---
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxDistance = 30;
+        controls.minDistance = 5;
+
+        // Mouse Parallax effect
+        let mouseX = 0;
+        let mouseY = 0;
+        let targetX = 0;
+        let targetY = 0;
+        
+        document.addEventListener('mousemove', (event) => {
+            mouseX = (event.clientX - window.innerWidth / 2) * 0.001;
+            mouseY = (event.clientY - window.innerHeight / 2) * 0.001;
+        });
+
+        const coordsEl = document.getElementById('coords');
+
+        // --- Animation Loop ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const elapsedTime = clock.getElapsedTime();
+
+            // Parallax movement
+            targetX = mouseX * 2;
+            targetY = mouseY * 2;
+            
+            camera.position.x += 0.05 * (targetX - camera.position.x);
+            camera.position.y += 0.05 * (-targetY - camera.position.y);
+            
+            // HUD Rings Rotation
+            ring1.rotation.z = elapsedTime * 0.5;
+            ring2.rotation.z = -elapsedTime * 0.3;
+            ring3.rotation.z = elapsedTime * 0.1;
+            ring4.rotation.x = Math.sin(elapsedTime * 0.5) * 0.2;
+            ring4.rotation.y = Math.cos(elapsedTime * 0.3) * 0.2;
+            ring5.rotation.z = -elapsedTime * 0.05;
+
+            // Particles slow rotation
+            particlesMesh.rotation.y = elapsedTime * 0.02;
+            particlesMesh.rotation.x = elapsedTime * 0.01;
+
+            // Image slight bobbing
+            if (ironManPlane) {
+                ironManPlane.position.y = Math.sin(elapsedTime) * 0.2;
+                ironManPlane.rotation.y = mouseX * 0.5;
+                ironManPlane.rotation.x = mouseY * 0.5;
+            }
+
+            // Update UI text
+            coordsEl.innerHTML = `X: ${camera.position.x.toFixed(3)}<br>Y: ${camera.position.y.toFixed(3)}<br>Z: ${camera.position.z.toFixed(3)}`;
+
+            controls.update();
+            composer.render();
+        }
+
+        animate();
+
+        // --- Resize Handler ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
